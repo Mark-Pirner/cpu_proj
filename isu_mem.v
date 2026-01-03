@@ -1,16 +1,19 @@
 //clocked read-only ram with async reset
 module isu_mem #(
-	parameter A_WIDTH = 8,
+	parameter MEM_A_WIDTH = 8,
 	parameter D_WIDTH = 32
 )
 (
 	input clk,
 	input rst,
-	input [A_WIDTH-1:0] addr,
+	input [31:0] addr,
 	output reg [D_WIDTH-1:0] dout
 );
 
 	reg [D_WIDTH-1:0] mem [0:(1<<A_WIDTH)-1];
+
+	wire [MEM_A_WIDTH-1:0] mem_index;
+	assign mem_index = addr[MEM_A_WIDTH + 1 : 2];
 
 	`ifdef LTB_EN
 		initial begin
@@ -23,6 +26,6 @@ module isu_mem #(
 		if (rst)
 			dout <= 0;
 		else
-			dout <= mem[addr];
+			dout <= [mem_index];
 	end
 endmodule

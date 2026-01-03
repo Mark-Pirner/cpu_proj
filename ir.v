@@ -16,9 +16,9 @@ module ir #(
 	output reg [RF_SIZE-1:0] rs2,
 	output reg [RF_SIZE-1:0] rs1,
 	output reg [RF_SIZE-1:0] rd
-	output reg [FUNCT_7_SIZE] funct7,
-	output reg [FUNCT_3_SIZE] funct3,
-	output reg [OP_CODE_SIZE] op_code
+	output reg [FUNCT_7_SIZE-1:0] funct7,
+	output reg [FUNCT_3_SIZE-1:0] funct3,
+	output reg [OP_CODE_SIZE-1:0] op_code
 )
 	always @(posedge clk, posedge rst)
 	begin

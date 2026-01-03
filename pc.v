@@ -1,13 +1,13 @@
 //basic program counter
 module pc #(
-	parameter D_WIDTH = 32
+	parameter A_WIDTH = 32
 )
 (
 	input clk,
 	input rst,
 	input en,
-	input [D_WIDTH-1:0] next_pc,
-	output reg pc
+	input [A_WIDTH-1:0] next_pc,
+	output reg [A_WIDTH-1:0] pc
 )
 	always @(posedge clk)
 	begin

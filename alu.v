@@ -2,9 +2,10 @@
 
 module alu #(
     parameter D_WIDTH = 32,
+    parameter OP_SIZE = 4
 )
 (
-    input [3:0] alu_op, //operand select
+    input [OP_SIZE-1:0] alu_op, //operand select
     input [D_WIDTH-1:0] a, //operand 1 (from RF)
     input [D_WIDTH-1:0] b, //operand 2 (from RF or immediate)
     output [D_WIDTH-1:0] y,
