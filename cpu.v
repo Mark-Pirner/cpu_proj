@@ -5,6 +5,7 @@
 `include "ir.v"
 `include "alu.v"
 `include "id_stage.v"
+`include "ex_mem.v"
 
 `define D_WIDTH         32
 `define A_WIDTH         32
@@ -93,17 +94,8 @@ module top_inst(
 
     wire [`D_WIDTH-1:0]                 idex_rs1_val, idex_rs2_val, idex_imm;
     wire [`RF_SIZE-1:0]                 idex_rd;
-    wire                                idex_reg_write, idex_alu_src_imm, idex_mem_we, idex_mem_re;
+    wire                                idex_reg_write, idex_alu_src_imm, idex_mem_we, idex_mem_re, idex_mem_to_reg;
     wire [`OP_SIZE-1:0]                 idex_alu_op;
-    wire ex_                            reg_write;
-    wire [`RF_SIZE-1:0]                 ex_rd;
-
-    assign ex_reg_write = idex_reg_write;
-    assign ex_rd = idex_rd;
-
-    wire                                wb_data;
-    assign wb_data = idex_mem_re ? r_data : alu_out;
-
 
     id_stage #(
         .D_WIDTH(`D_WIDTH),
@@ -123,8 +115,8 @@ module top_inst(
         .funct3(funct3),
         .funct7(funct7),
 
-        .wb_we(ex_reg_write && (ex_rd != 0)),
-        .wb_rd(ex_rd),
+        .wb_we(memwb_reg_write && (memwb_rd != 0)),
+        .wb_rd(memwb_rd),
         .wb_data(wb_data),
 
         .rs1_val_ex(idex_rs1_val),
@@ -135,8 +127,27 @@ module top_inst(
         .alu_src_imm_ex(idex_alu_src_imm),
         .alu_op_ex(idex_alu_op),
         .mem_we_ex(idex_mem_we),
-        .mem_re_ex(idex_mem_re)
+        .mem_re_ex(idex_mem_re),
+        .mem_to_reg_ex(idex_mem_to_reg)
     );
+
+    wire [`D_WIDTH-1:0]                 exmem_alu_out;
+    wire [`D_WIDTH-1:0]                 exmem_rs2_val;
+    wire [`RF_SIZE-1:0]                 exmem_rd;
+    wire                                exmem_reg_write;
+    wire                                exmem_mem_we;
+    wire                                exmem_mem_re;
+    wire                                exmem_mem_to_reg;
+
+    wire [`D_WIDTH-1:0]                 memwb_alu_out;
+    wire [`D_WIDTH-1:0]                 memwb_mem_data;
+    wire [`RF_SIZE-1:0]                 memwb_rd;
+    wire                                memwb_reg_write;  
+
+    wire [`D_WIDTH-1:0]                 wb_data;
+    wire                                memwb_mem_to_reg;
+
+    assign wb_data = memwb_mem_to_reg ? memwb_mem_data : memwb_alu_out;
 
     //instantiate data mem
     //need to handle control logic for these signals
@@ -149,11 +160,11 @@ module top_inst(
     data_mem_u(
         .clk(clk),
         .rst(rst),
-        .we(idex_mem_we),
-        .w_addr(alu_out),
-        .w_data(idex_rs2_val),
-        .re(idex_mem_re),
-        .r_addr(alu_out),
+        .we(exmem_mem_we),
+        .w_addr(exmem_alu_out),
+        .w_data(exmem_rs2_val),
+        .re(exmem_mem_re),
+        .r_addr(exmem_alu_out),
         .r_data(r_data)
     );
 
@@ -179,6 +190,52 @@ module top_inst(
         .y(alu_out),
         .zero(alu_zero)
     );
+
+    ex_mem #(
+        .D_WIDTH(`D_WIDTH),
+        .RF_SIZE(`RF_SIZE)
+    ) 
+    ex_mem_u (
+        .clk(clk),
+        .rst(rst),
+
+        .alu_out_ex(alu_out),
+        .rs2_val_ex(idex_rs2_val),
+        .rd_ex(idex_rd),
+        .reg_write_ex(idex_reg_write),
+        .mem_we_ex(idex_mem_we),
+        .mem_re_ex(idex_mem_re),
+        .mem_to_reg_ex(idex_mem_to_reg),
+
+        .alu_out_mem(exmem_alu_out),
+        .rs2_val_mem(exmem_rs2_val),
+        .rd_mem(exmem_rd),
+        .reg_write_mem(exmem_reg_write),
+        .mem_we_mem(exmem_mem_we),
+        .mem_re_mem(exmem_mem_re),
+        .mem_to_reg_mem(exmem_mem_to_reg)
+    );
+
+    mem_wb #(
+        .D_WIDTH(`D_WIDTH),
+        .RF_SIZE(`RF_SIZE)
+    ) mem_wb_u (
+        .clk(clk),
+        .rst(rst),
+
+        .alu_out_mem(exmem_alu_out),
+        .r_data_mem(r_data),
+        .rd_mem(exmem_rd),
+        .reg_write_mem(exmem_reg_write),
+        .mem_to_reg_mem(exmem_mem_to_reg),
+
+        .alu_out_wb(memwb_alu_out),
+        .mem_data_wb(memwb_mem_data),
+        .rd_wb(memwb_rd),
+        .reg_write_wb(memwb_reg_write),
+        .mem_to_reg_wb(memwb_mem_to_reg)
+    );
+
 endmodule
 
 
