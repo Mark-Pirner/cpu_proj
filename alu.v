@@ -28,5 +28,3 @@ module alu #(
     assign zero = (y == 0'b1);
 
 endmodule
-
-

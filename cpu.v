@@ -22,11 +22,56 @@ module top_inst(
     input rst
 );
 
-    //instanstaite pc register 
+    //pc wire
     wire                                pc_en;
     wire [`A_WIDTH-1:0]                 pc_cur;
     wire [`A_WIDTH-1:0]                 pc_next;
 
+    //isu wires
+    wire[`D_WIDTH-1:0]                  cur_isu;
+
+    //ir wires
+    wire                                ir_en;
+
+    //idex wires
+    wire                                id_en;
+    wire [`D_WIDTH-1:0]                 idex_rs1_val;
+    wire [`D_WIDTH-1:0]                 idex_rs2_val;
+    wire [`D_WIDTH-1:0]                 idex_imm;
+    wire [`RF_SIZE-1:0]                 idex_rd;
+    wire                                idex_reg_write;
+    wire                                idex_alu_src_imm;
+    wire                                idex_mem_we;
+    wire                                idex_mem_re;
+    wire                                idex_mem_to_reg;
+    wire [`OP_SIZE-1:0]                 idex_alu_op;
+
+    //exmem wires
+    wire [`D_WIDTH-1:0]                 exmem_alu_out;
+    wire [`D_WIDTH-1:0]                 exmem_rs2_val;
+    wire [`RF_SIZE-1:0]                 exmem_rd;
+    wire                                exmem_reg_write;
+    wire                                exmem_mem_we;
+    wire                                exmem_mem_re;
+    wire                                exmem_mem_to_reg;
+    wire [`D_WIDTH-1:0]                 exmem_r_data;
+
+    //memwb wires
+    wire [`D_WIDTH-1:0]                 memwb_alu_out;
+    wire [`D_WIDTH-1:0]                 memwb_mem_data;
+    wire [`RF_SIZE-1:0]                 memwb_rd;
+    wire                                memwb_reg_write;
+    wire [`D_WIDTH-1:0]                 wb_data;
+    wire                                memwb_mem_to_reg;
+
+    //alu wires
+    wire [`D_WIDTH-1:0]                 a_in;
+    wire [`D_WIDTH-1:0]                 b_in;
+    wire [`D_WIDTH-1:0]                 alu_out;
+    wire                                alu_zero;
+
+    //----------------------------------INSTRUCTION FETCH--------------------------------------------
+    //instantiate pc register 
     assign pc_en = 1'b1;
     assign pc_next = pc_cur + 4; //advance a word
 
@@ -42,8 +87,6 @@ module top_inst(
     );
 
     //instantiate isu memory
-    wire[`D_WIDTH-1:0]                  cur_isu;
-
     isu_mem # (
         .MEM_A_WIDTH(`MEM_A_WIDTH),
         .D_WIDTH(`D_WIDTH)
@@ -51,12 +94,11 @@ module top_inst(
     isu_mem_u(
         .clk(clk),
         .rst(rst),
-        .addr(pc_cur), // get the instruction from the isu_mem indexed pc
+        .addr(pc_cur),
         .dout(cur_isu)
     );
 
     //instantiate instruction register
-    wire                                ir_en;
     assign ir_en = 1'b1;
 
     wire [`D_WIDTH-1:0]                 instr;
@@ -89,13 +131,9 @@ module top_inst(
         .op_code(opcode)
     );
 
-    wire                                id_en;
+    //----------------------------------INSTRUCTION DECODE--------------------------------------------
     assign id_en = 1'b1;
-
-    wire [`D_WIDTH-1:0]                 idex_rs1_val, idex_rs2_val, idex_imm;
-    wire [`RF_SIZE-1:0]                 idex_rd;
-    wire                                idex_reg_write, idex_alu_src_imm, idex_mem_we, idex_mem_re, idex_mem_to_reg;
-    wire [`OP_SIZE-1:0]                 idex_alu_op;
+    assign wb_data = memwb_mem_to_reg ? memwb_mem_data : memwb_alu_out;
 
     id_stage #(
         .D_WIDTH(`D_WIDTH),
@@ -131,53 +169,10 @@ module top_inst(
         .mem_to_reg_ex(idex_mem_to_reg)
     );
 
-    wire [`D_WIDTH-1:0]                 exmem_alu_out;
-    wire [`D_WIDTH-1:0]                 exmem_rs2_val;
-    wire [`RF_SIZE-1:0]                 exmem_rd;
-    wire                                exmem_reg_write;
-    wire                                exmem_mem_we;
-    wire                                exmem_mem_re;
-    wire                                exmem_mem_to_reg;
-
-    wire [`D_WIDTH-1:0]                 memwb_alu_out;
-    wire [`D_WIDTH-1:0]                 memwb_mem_data;
-    wire [`RF_SIZE-1:0]                 memwb_rd;
-    wire                                memwb_reg_write;  
-
-    wire [`D_WIDTH-1:0]                 wb_data;
-    wire                                memwb_mem_to_reg;
-
-    assign wb_data = memwb_mem_to_reg ? memwb_mem_data : memwb_alu_out;
-
-    //instantiate data mem
-    //need to handle control logic for these signals
-    wire [`D_WIDTH-1:0]                 r_data;
-
-    data_mem # (
-        .MEM_A_WIDTH(`MEM_A_WIDTH),
-        .D_WIDTH(`D_WIDTH)
-    )    
-    data_mem_u(
-        .clk(clk),
-        .rst(rst),
-        .we(exmem_mem_we),
-        .w_addr(exmem_alu_out),
-        .w_data(exmem_rs2_val),
-        .re(exmem_mem_re),
-        .r_addr(exmem_alu_out),
-        .r_data(r_data)
-    );
-
-    //instantiate alu, need to add control logic for immediate later
-    wire [`D_WIDTH-1:0]                 a_in;
+    //----------------------------------INSTRUCTION EXEC--------------------------------------------
+    //instantiate alu
     assign a_in = idex_rs1_val;
-    
-    //modify b_in later to switch between imm and rs2_d
-    wire [`D_WIDTH-1:0]                 b_in;
     assign b_in = idex_alu_src_imm ? idex_imm : idex_rs2_val;
-
-    wire [`D_WIDTH-1:0]                 alu_out;
-    wire                                alu_zero;
 
     alu # (
         .D_WIDTH(`D_WIDTH),
@@ -191,6 +186,24 @@ module top_inst(
         .zero(alu_zero)
     );
 
+    //----------------------------------MEM EXEC--------------------------------------------
+    //instantiate data mem
+    data_mem # (
+        .MEM_A_WIDTH(`MEM_A_WIDTH),
+        .D_WIDTH(`D_WIDTH)
+    )    
+    data_mem_u(
+        .clk(clk),
+        .rst(rst),
+        .we(exmem_mem_we),
+        .w_addr(exmem_alu_out),
+        .w_data(exmem_rs2_val),
+        .re(exmem_mem_re),
+        .r_addr(exmem_alu_out),
+        .r_data(exmem_r_data)
+    );
+
+    //instantiate exmem
     ex_mem #(
         .D_WIDTH(`D_WIDTH),
         .RF_SIZE(`RF_SIZE)
@@ -216,6 +229,8 @@ module top_inst(
         .mem_to_reg_mem(exmem_mem_to_reg)
     );
 
+    //----------------------------------WB--------------------------------------------
+    //instantiate mem_wb
     mem_wb #(
         .D_WIDTH(`D_WIDTH),
         .RF_SIZE(`RF_SIZE)
@@ -224,7 +239,7 @@ module top_inst(
         .rst(rst),
 
         .alu_out_mem(exmem_alu_out),
-        .r_data_mem(r_data),
+        .r_data_mem(exmem_r_data),
         .rd_mem(exmem_rd),
         .reg_write_mem(exmem_reg_write),
         .mem_to_reg_mem(exmem_mem_to_reg),
@@ -235,7 +250,4 @@ module top_inst(
         .reg_write_wb(memwb_reg_write),
         .mem_to_reg_wb(memwb_mem_to_reg)
     );
-
 endmodule
-
-
