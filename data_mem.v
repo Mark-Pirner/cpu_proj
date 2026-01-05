@@ -2,6 +2,7 @@
 module data_mem #(
 	parameter MEM_A_WIDTH = 8,
 	parameter D_WIDTH = 32,
+	parameter A_WIDTH =32
 )
 (
 	`ifdef LTB_EN
@@ -13,10 +14,10 @@ module data_mem #(
 	input clk,
 	input rst,
 	input we,
-	input [31:0] w_addr,
+	input [A_WIDTH-1:0] w_addr,
 	input [D_WIDTH-1:0] w_data,
 	input re,
-	input [31:0] r_addr,
+	input [A_WIDTH-1:0] r_addr,
 	output reg [D_WIDTH-1:0] r_data
 );
 	reg [D_WIDTH-1] mem [0:(1<<MEM_A_WIDTH)-1];

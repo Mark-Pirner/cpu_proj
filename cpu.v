@@ -190,7 +190,8 @@ module top_inst(
     //instantiate data mem
     data_mem # (
         .MEM_A_WIDTH(`MEM_A_WIDTH),
-        .D_WIDTH(`D_WIDTH)
+        .D_WIDTH(`D_WIDTH),
+        .A_WIDTH(`A_WIDTH)
     )    
     data_mem_u(
         .clk(clk),

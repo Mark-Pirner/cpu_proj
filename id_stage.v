@@ -60,6 +60,7 @@ module id_stage #(
     reg  [D_WIDTH-1:0]   imm_d;
     reg                  mem_to_reg_d;
 
+    //immediate 12 bits, sign extended
     wire [D_WIDTH-1:0] imm_i_ext = {{20{instr[31]}}, instr[31:20]};
 
     always @(*) 
@@ -71,14 +72,66 @@ module id_stage #(
         mem_re_d     = 1'b0;
         imm_d        = {D_WIDTH{1'b0}};
         mem_to_reg_d = 1'b0;
-        //ADDI decode
-        if ((opcode == 7'b0010011) && (funct3 == 3'b000)) 
+        
+
+        //-----------------------R_TYPE ISU------------------------------------
+        if (opcode == 7'b0010011) 
         begin
             reg_write_d   = 1'b1;
-            alu_src_imm_d = 1'b1;
-            imm_d         = imm_i_ext;
-            alu_op_d      = 4'b0000; 
+            alu_src_imm_d = 1'b0;
             mem_to_reg_d  = 1'b0;
+            mem_we_d =      1'b0;
+            mem_re_d =      1'b0;
+
+            case(funct3)
+                3'b000:  alu_op_d = (funct7 == 7'b0000000) : 4'b0000 : 4'b0001;
+                3'b111:  alu_op_d = 4'b0010;
+                3'b110:  alu_op_d = 4'b0011;
+                3'b100:  alu_op_d = 4'b0100;
+                3'b010:  alu_op_d = 4'b0101;
+                default: alu_op_d = 4'b1111;
+            endcase
+        end
+        //-----------------------I_TYPE ISU------------------------------------
+        else if (op_code == 7'b0010011)
+        begin
+            reg_write_d =   1'b1;
+            alu_src_imm_d = 1'b1;
+            mem_to_reg_d =  1'b0;
+            mem_we_d =      1'b0;
+            mem_re_d =      1'b0;
+            imm_d =         imm_i_ext;
+
+            case(funct3)
+                3'b000:  alu_op_d = (funct7 == 7'b0000000) : 4'b0000 : 4'b0001;
+                3'b111:  alu_op_d = 4'b0010;
+                3'b110:  alu_op_d = 4'b0011;
+                3'b100:  alu_op_d = 4'b0100;
+                3'b010:  alu_op_d = 4'b0101;
+                default: alu_op_d = 4'b1111;
+            endcase
+        end
+        //-----------------------LOAD WORD------------------------------------
+        else if (op_code == 7'b0000011)
+        begin
+            reg_write_d =   1'b1;
+            alu_src_imm_d = 1'b1;
+            mem_to_reg_d =  1'b1;
+            mem_we_d =      1'b0;
+            mem_re_d =      1'b1;
+            imm_d =         imm_i_ext;
+            alu_op =        4'b0000;
+        end
+        //-----------------------STORE WORD------------------------------------
+        else if(op_code == 7'b0100011)
+        begin
+            reg_write_d = 1'b0;
+            alu_src_imm_d = 1'b1;
+            mem_to_reg_d = 1'b0;
+            mem_we_d = 1'b1;
+            mem_re_d = 1'b0;
+            imm_d = {{20{instr[31]}}, instr[31:25], instr[11:7]};
+            alu_op_d = 4'b0000;
         end
     end
 
