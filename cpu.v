@@ -3,13 +3,13 @@
 `include "data_mem.v"
 `include "pc.v"
 `include "ir.v"
-`include "rf.v"
 `include "alu.v"
 `include "id_stage.v"
 
 `define D_WIDTH         32
 `define A_WIDTH         32
 `define N_REGS          32
+`define MEM_A_WIDTH     8
 `define RF_SIZE         $clog2(`N_REGS)
 `define OP_CODE_SIZE    7
 `define FUNCT_3_SIZE    3
@@ -29,7 +29,10 @@ module top_inst(
     assign pc_en = 1'b1;
     assign pc_next = pc_cur + 4; //advance a word
 
-    pc pc_u(
+    pc # (
+        .A_WIDTH(`A_WIDTH)
+    )    
+    pc_u(
         .clk(clk),
         .rst(rst),
         .en(pc_en),
@@ -40,7 +43,11 @@ module top_inst(
     //instantiate isu memory
     wire[`D_WIDTH-1:0]                  cur_isu;
 
-    isu_mem isu_mem_u(
+    isu_mem # (
+        .MEM_A_WIDTH(`MEM_A_WIDTH),
+        .D_WIDTH(`D_WIDTH)
+    )    
+    isu_mem_u(
         .clk(clk),
         .rst(rst),
         .addr(pc_cur), // get the instruction from the isu_mem indexed pc
@@ -59,7 +66,15 @@ module top_inst(
     wire [`FUNCT_3_SIZE-1:0]            funct3;
     wire [`OP_CODE_SIZE-1:0]            opcode;
 
-    ir ir_u(
+    ir # (
+        .D_WIDTH(`D_WIDTH),
+        .N_REGS(`N_REGS),
+        .RF_SIZE(`RF_SIZE),
+        .OP_CODE_SIZE(`OP_CODE_SIZE),
+        .FUNCT_3_SIZE(`FUNCT_3_SIZE),
+        .FUNCT_7_SIZE(`FUNCT_7_SIZE)
+    )    
+    ir_u(
         .clk(clk),
         .rst(rst),
         .en(ir_en),
@@ -73,13 +88,22 @@ module top_inst(
         .op_code(opcode)
     );
 
-    wire id_en;
+    wire                                id_en;
     assign id_en = 1'b1;
 
-    wire [`D_WIDTH-1:0] idex_rs1_val, idex_rs2_val, idex_imm;
-    wire [`RF_SIZE-1:0] idex_rd;
-    wire idex_reg_write, idex_alu_src_imm, idex_mem_we, idex_mem_re;
-    wire [`OP_SIZE-1:0] idex_alu_op;
+    wire [`D_WIDTH-1:0]                 idex_rs1_val, idex_rs2_val, idex_imm;
+    wire [`RF_SIZE-1:0]                 idex_rd;
+    wire                                idex_reg_write, idex_alu_src_imm, idex_mem_we, idex_mem_re;
+    wire [`OP_SIZE-1:0]                 idex_alu_op;
+    wire ex_                            reg_write;
+    wire [`RF_SIZE-1:0]                 ex_rd;
+
+    assign ex_reg_write = idex_reg_write;
+    assign ex_rd = idex_rd;
+
+    wire                                wb_data;
+    assign wb_data = idex_mem_re ? r_data : alu_out;
+
 
     id_stage #(
         .D_WIDTH(`D_WIDTH),
@@ -90,6 +114,7 @@ module top_inst(
         .clk(clk),
         .rst(rst),
         .en(id_en),
+
         .instr(instr),
         .rs1(rs1),
         .rs2(rs2),
@@ -97,8 +122,11 @@ module top_inst(
         .opcode(opcode),
         .funct3(funct3),
         .funct7(funct7),
-        .rs1_val_in(rs1_d),
-        .rs2_val_in(rs2_d),
+
+        .wb_we(ex_reg_write && (ex_rd != 0)),
+        .wb_rd(ex_rd),
+        .wb_data(wb_data),
+
         .rs1_val_ex(idex_rs1_val),
         .rs2_val_ex(idex_rs2_val),
         .imm_ex(idex_imm),
@@ -110,44 +138,22 @@ module top_inst(
         .mem_re_ex(idex_mem_re)
     );
 
-
-    //instantiate register filer
-    wire                                rf_we;   
-    wire [`D_WIDTH-1:0]                 w_data; 
-    assign w_data = alu_out;                       
-    assign rf_we = idex_reg_write && (rd != 0);
-
-    wire [`D_WIDTH-1:0]                 rs2_d;
-    wire [`D_WIDTH-1:0]                 rs1_d;
-
-    rf rf_u(
-        .clk(clk),
-        .rst(rst),
-        .we(rf_we),
-        .w_addr(rd),
-        .w_data(w_data),
-        .rs2(rs2),
-        .rs1(rs1),
-        .rs2_d(rs2_d),
-        .rs1_d(rs1_d)
-    );
-
     //instantiate data mem
-    wire [`A_WIDTH-1:0]                 data_mem_w_addr;
-    assign data_mem_w_addr = {25'b0, rd, 2'b0};
-
     //need to handle control logic for these signals
-    wire [`A_WIDTH-1:0]                 r_addr;
     wire [`D_WIDTH-1:0]                 r_data;
 
-    data_mem data_mem_u(
+    data_mem # (
+        .MEM_A_WIDTH(`MEM_A_WIDTH),
+        .D_WIDTH(`D_WIDTH)
+    )    
+    data_mem_u(
         .clk(clk),
         .rst(rst),
         .we(idex_mem_we),
-        .w_addr(data_mem_w_addr),
-        .w_data(w_data),
+        .w_addr(alu_out),
+        .w_data(idex_rs2_val),
         .re(idex_mem_re),
-        .r_addr(r_addr),
+        .r_addr(alu_out),
         .r_data(r_data)
     );
 
@@ -162,7 +168,11 @@ module top_inst(
     wire [`D_WIDTH-1:0]                 alu_out;
     wire                                alu_zero;
 
-    alu alu_u(
+    alu # (
+        .D_WIDTH(`D_WIDTH),
+        .OP_SIZE(`OP_SIZE)
+    )    
+    alu_u(
         .alu_op(idex_alu_op),
         .a(a_in),
         .b(b_in),

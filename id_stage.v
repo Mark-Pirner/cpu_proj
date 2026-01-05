@@ -1,3 +1,5 @@
+`include "rf.v"
+
 module id_stage #(
     parameter D_WIDTH = 32,
     parameter N_REGS  = 32,
@@ -6,16 +8,23 @@ module id_stage #(
 )(
     input  wire                 clk,
     input  wire                 rst,
-    input  wire                 en,      
+    input  wire                 en,   
+
+    //from IF   
     input  wire [D_WIDTH-1:0]   instr,
     input  wire [RF_SIZE-1:0]   rs1,
     input  wire [RF_SIZE-1:0]   rs2,
     input  wire [RF_SIZE-1:0]   rd,
     input  wire [6:0]           opcode,
     input  wire [2:0]           funct3,
-    input  wire [6:0]           funct7,     
-    input  wire [D_WIDTH-1:0]   rs1_val_in,
-    input  wire [D_WIDTH-1:0]   rs2_val_in,
+    input  wire [6:0]           funct7, 
+
+    //from WB
+    input wire                  wb_we,
+    input wire [RF_SIZE-1:0]    wb_rd,
+    input wire [D_WIDTH-1:0]    wb_data,
+
+    //ID
     output reg  [D_WIDTH-1:0]   rs1_val_ex,
     output reg  [D_WIDTH-1:0]   rs2_val_ex,
     output reg  [D_WIDTH-1:0]   imm_ex,
@@ -26,6 +35,21 @@ module id_stage #(
     output reg                  mem_we_ex,
     output reg                  mem_re_ex
 );
+
+    wire [D_WIDTH-1:0]                 rs1_val;
+    wire [D_WIDTH-1:0]                 rs2_val;
+
+    rf rf_u(
+        .clk(clk),
+        .rst(rst),
+        .we(wb_we),
+        .w_addr(wb_rd),
+        .w_data(wb_data),
+        .rs2(rs2),
+        .rs1(rs1),
+        .rs2_d(rs2_val),
+        .rs1_d(rs1_val)
+    );
 
     reg                  reg_write_d;
     reg                  alu_src_imm_d;
