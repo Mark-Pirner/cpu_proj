@@ -5,6 +5,7 @@
 `include "ir.v"
 `include "rf.v"
 `include "alu.v"
+`include "id_stage.v"
 
 `define D_WIDTH         32
 `define A_WIDTH         32
@@ -50,6 +51,7 @@ module top_inst(
     wire                                ir_en;
     assign ir_en = 1'b1;
 
+    wire [`D_WIDTH-1:0]                 instr;
     wire [`RF_SIZE-1:0]                 rs2;
     wire [`RF_SIZE-1:0]                 rs1;
     wire [`RF_SIZE-1:0]                 rd;
@@ -62,6 +64,7 @@ module top_inst(
         .rst(rst),
         .en(ir_en),
         .isu(cur_isu),
+        .instr(instr),
         .rs2(rs2),
         .rs1(rs1),
         .rd(rd),
@@ -70,10 +73,49 @@ module top_inst(
         .op_code(opcode)
     );
 
+    wire id_en;
+    assign id_en = 1'b1;
+
+    wire [`D_WIDTH-1:0] idex_rs1_val, idex_rs2_val, idex_imm;
+    wire [`RF_SIZE-1:0] idex_rd;
+    wire idex_reg_write, idex_alu_src_imm, idex_mem_we, idex_mem_re;
+    wire [`OP_SIZE-1:0] idex_alu_op;
+
+    id_stage #(
+        .D_WIDTH(`D_WIDTH),
+        .N_REGS(`N_REGS),
+        .RF_SIZE(`RF_SIZE),
+        .OP_SIZE(`OP_SIZE)
+    ) id_stage_u (
+        .clk(clk),
+        .rst(rst),
+        .en(id_en),
+        .instr(instr),
+        .rs1(rs1),
+        .rs2(rs2),
+        .rd(rd),
+        .opcode(opcode),
+        .funct3(funct3),
+        .funct7(funct7),
+        .rs1_val_in(rs1_d),
+        .rs2_val_in(rs2_d),
+        .rs1_val_ex(idex_rs1_val),
+        .rs2_val_ex(idex_rs2_val),
+        .imm_ex(idex_imm),
+        .rd_ex(idex_rd),
+        .reg_write_ex(idex_reg_write),
+        .alu_src_imm_ex(idex_alu_src_imm),
+        .alu_op_ex(idex_alu_op),
+        .mem_we_ex(idex_mem_we),
+        .mem_re_ex(idex_mem_re)
+    );
+
+
     //instantiate register filer
     wire                                rf_we;   
-    wire [`D_WIDTH-1:0]                 w_data;                        
-    assign rf_we = 1'b1; //update logic
+    wire [`D_WIDTH-1:0]                 w_data; 
+    assign w_data = alu_out;                       
+    assign rf_we = idex_reg_write && (rd != 0);
 
     wire [`D_WIDTH-1:0]                 rs2_d;
     wire [`D_WIDTH-1:0]                 rs1_d;
@@ -93,8 +135,6 @@ module top_inst(
     //instantiate data mem
     wire [`A_WIDTH-1:0]                 data_mem_w_addr;
     assign data_mem_w_addr = {25'b0, rd, 2'b0};
-    wire                                re;
-    assign re = 1'b0;
 
     //need to handle control logic for these signals
     wire [`A_WIDTH-1:0]                 r_addr;
@@ -103,31 +143,27 @@ module top_inst(
     data_mem data_mem_u(
         .clk(clk),
         .rst(rst),
-        .we(rf_we),
+        .we(idex_mem_we),
         .w_addr(data_mem_w_addr),
         .w_data(w_data),
-        .re(re),
+        .re(idex_mem_re),
         .r_addr(r_addr),
         .r_data(r_data)
-    )
+    );
 
     //instantiate alu, need to add control logic for immediate later
     wire [`D_WIDTH-1:0]                 a_in;
-    assign a_in = rs1_d;
+    assign a_in = idex_rs1_val;
     
     //modify b_in later to switch between imm and rs2_d
     wire [`D_WIDTH-1:0]                 b_in;
-    assign b_in = rs2_d;
-
-    //add case statement for cur_op based on ir decode
-    wire [`OP_SIZE-1:0]                 cur_op;
-    assign cur_op = 4'b1111;
+    assign b_in = idex_alu_src_imm ? idex_imm : idex_rs2_val;
 
     wire [`D_WIDTH-1:0]                 alu_out;
     wire                                alu_zero;
 
     alu alu_u(
-        .alu_op(cur_op),
+        .alu_op(idex_alu_op),
         .a(a_in),
         .b(b_in),
         .y(alu_out),

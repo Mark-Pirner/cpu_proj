@@ -1,0 +1,80 @@
+module id_stage #(
+    parameter D_WIDTH = 32,
+    parameter N_REGS  = 32,
+    parameter RF_SIZE = $clog2(N_REGS),
+    parameter OP_SIZE = 4
+)(
+    input  wire                 clk,
+    input  wire                 rst,
+    input  wire                 en,      
+    input  wire [D_WIDTH-1:0]   instr,
+    input  wire [RF_SIZE-1:0]   rs1,
+    input  wire [RF_SIZE-1:0]   rs2,
+    input  wire [RF_SIZE-1:0]   rd,
+    input  wire [6:0]           opcode,
+    input  wire [2:0]           funct3,
+    input  wire [6:0]           funct7,     
+    input  wire [D_WIDTH-1:0]   rs1_val_in,
+    input  wire [D_WIDTH-1:0]   rs2_val_in,
+    output reg  [D_WIDTH-1:0]   rs1_val_ex,
+    output reg  [D_WIDTH-1:0]   rs2_val_ex,
+    output reg  [D_WIDTH-1:0]   imm_ex,
+    output reg  [RF_SIZE-1:0]   rd_ex,
+    output reg                  reg_write_ex,
+    output reg                  alu_src_imm_ex,
+    output reg  [OP_SIZE-1:0]   alu_op_ex,
+    output reg                  mem_we_ex,
+    output reg                  mem_re_ex
+);
+
+    reg                  reg_write_d;
+    reg                  alu_src_imm_d;
+    reg  [OP_SIZE-1:0]   alu_op_d;
+    reg                  mem_we_d;
+    reg                  mem_re_d;
+    reg  [D_WIDTH-1:0]   imm_d;
+
+    wire [D_WIDTH-1:0] imm_i_ext = {{20{instr[31]}}, instr[31:20]};
+
+    always @(*) begin
+        reg_write_d  = 1'b0;
+        alu_src_imm_d = 1'b0;
+        alu_op_d     = {OP_SIZE{1'b0}};
+        mem_we_d     = 1'b0;
+        mem_re_d     = 1'b0;
+        imm_d        = {D_WIDTH{1'b0}};
+
+        //ADDI decode
+        if ((opcode == 7'b0010011) && (funct3 == 3'b000)) begin
+            reg_write_d   = 1'b1;
+            alu_src_imm_d = 1'b1;
+            imm_d         = imm_i_ext;
+            alu_op_d      = 4'b0000; 
+        end
+    end
+
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            rs1_val_ex      <= {D_WIDTH{1'b0}};
+            rs2_val_ex      <= {D_WIDTH{1'b0}};
+            imm_ex          <= {D_WIDTH{1'b0}};
+            rd_ex           <= {RF_SIZE{1'b0}};
+            reg_write_ex    <= 1'b0;
+            alu_src_imm_ex  <= 1'b0;
+            alu_op_ex       <= {OP_SIZE{1'b0}};
+            mem_we_ex       <= 1'b0;
+            mem_re_ex       <= 1'b0;
+        end else if (en) begin
+            rs1_val_ex      <= rs1_val_in;
+            rs2_val_ex      <= rs2_val_in;
+            imm_ex          <= imm_d;
+            rd_ex           <= rd;
+            reg_write_ex    <= reg_write_d;
+            alu_src_imm_ex  <= alu_src_imm_d;
+            alu_op_ex       <= alu_op_d;
+            mem_we_ex       <= mem_we_d;
+            mem_re_ex       <= mem_re_d;
+        end
+    end
+
+endmodule
