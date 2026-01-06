@@ -6,25 +6,27 @@ module id_stage #(
     parameter RF_SIZE = $clog2(N_REGS),
     parameter OP_SIZE = 4
 )(
-    input  wire                 clk,
-    input  wire                 rst,
-    input  wire                 en,   
+    input                       clk,
+    input                       rst,
+    input                       en,   
 
     //from IF   
-    input  wire [D_WIDTH-1:0]   instr,
-    input  wire [RF_SIZE-1:0]   rs1,
-    input  wire [RF_SIZE-1:0]   rs2,
-    input  wire [RF_SIZE-1:0]   rd,
-    input  wire [6:0]           opcode,
-    input  wire [2:0]           funct3,
-    input  wire [6:0]           funct7, 
+    input   [D_WIDTH-1:0]       instr,
+    input   [RF_SIZE-1:0]       rs1,
+    input   [RF_SIZE-1:0]       rs2,
+    input   [RF_SIZE-1:0]       rd,
+    input   [6:0]               opcode,
+    input   [2:0]               funct3,
+    input   [6:0]               funct7, 
 
     //from WB
-    input wire                  wb_we,
-    input wire [RF_SIZE-1:0]    wb_rd,
-    input wire [D_WIDTH-1:0]    wb_data,
+    input                       wb_we,
+    input  [RF_SIZE-1:0]        wb_rd,
+    input  [D_WIDTH-1:0]        wb_data,
 
     //ID
+    output reg  [RF_SIZE-1:0]   rs1_ex,
+    output reg  [RF_SIZE-1:0]   rs2_ex,
     output reg  [D_WIDTH-1:0]   rs1_val_ex,
     output reg  [D_WIDTH-1:0]   rs2_val_ex,
     output reg  [D_WIDTH-1:0]   imm_ex,
@@ -48,8 +50,8 @@ module id_stage #(
         .w_data(wb_data),
         .rs2(rs2),
         .rs1(rs1),
-        .rs2_d(rs2_val),
-        .rs1_d(rs1_val)
+        .rs2_d(rs2_val_in),
+        .rs1_d(rs1_val_in)
     );
 
     reg                  reg_write_d;
@@ -75,7 +77,7 @@ module id_stage #(
         
 
         //-----------------------R_TYPE ISU------------------------------------
-        if (opcode == 7'b0010011) 
+        if (opcode == 7'b0110011) 
         begin
             reg_write_d   = 1'b1;
             alu_src_imm_d = 1'b0;
@@ -84,7 +86,7 @@ module id_stage #(
             mem_re_d =      1'b0;
 
             case(funct3)
-                3'b000:  alu_op_d = (funct7 == 7'b0000000) : 4'b0000 : 4'b0001;
+                3'b000:  alu_op_d = (funct7 == 7'b0000000) ? 4'b0000 : 4'b0001;
                 3'b111:  alu_op_d = 4'b0010;
                 3'b110:  alu_op_d = 4'b0011;
                 3'b100:  alu_op_d = 4'b0100;
@@ -93,7 +95,7 @@ module id_stage #(
             endcase
         end
         //-----------------------I_TYPE ISU------------------------------------
-        else if (op_code == 7'b0010011)
+        else if (opcode == 7'b0010011)
         begin
             reg_write_d =   1'b1;
             alu_src_imm_d = 1'b1;
@@ -103,7 +105,7 @@ module id_stage #(
             imm_d =         imm_i_ext;
 
             case(funct3)
-                3'b000:  alu_op_d = (funct7 == 7'b0000000) : 4'b0000 : 4'b0001;
+                3'b000:  alu_op_d = (funct7 == 7'b0000000) ? 4'b0000 : 4'b0001;
                 3'b111:  alu_op_d = 4'b0010;
                 3'b110:  alu_op_d = 4'b0011;
                 3'b100:  alu_op_d = 4'b0100;
@@ -112,7 +114,7 @@ module id_stage #(
             endcase
         end
         //-----------------------LOAD WORD------------------------------------
-        else if (op_code == 7'b0000011)
+        else if (opcode == 7'b0000011)
         begin
             reg_write_d =   1'b1;
             alu_src_imm_d = 1'b1;
@@ -120,10 +122,10 @@ module id_stage #(
             mem_we_d =      1'b0;
             mem_re_d =      1'b1;
             imm_d =         imm_i_ext;
-            alu_op =        4'b0000;
+            alu_op_d =        4'b0000;
         end
         //-----------------------STORE WORD------------------------------------
-        else if(op_code == 7'b0100011)
+        else if(opcode == 7'b0100011)
         begin
             reg_write_d = 1'b0;
             alu_src_imm_d = 1'b1;
@@ -149,6 +151,8 @@ module id_stage #(
             mem_we_ex       <= 1'b0;
             mem_re_ex       <= 1'b0;
             mem_to_reg_ex   <= 1'b0;
+            rs1_ex          <= {RF_SIZE{1'b0}};
+            rs2_ex          <= {RF_SIZE{1'b0}};
         end 
         else if (en) 
         begin
@@ -162,6 +166,8 @@ module id_stage #(
             mem_we_ex       <= mem_we_d;
             mem_re_ex       <= mem_re_d;
             mem_to_reg_ex   <= mem_to_reg_d;
+            rs1_ex          <= rs1;
+            rs2_ex          <= rs2;
         end
     end
 endmodule

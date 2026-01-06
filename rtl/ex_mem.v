@@ -2,17 +2,17 @@ module ex_mem #(
     parameter D_WIDTH = 32,
     parameter RF_SIZE = 5
 )(
-    input  wire                 clk,
-    input  wire                 rst,
+    input                   clk,
+    input                   rst,
 
     //from ex
-    input  wire [D_WIDTH-1:0]   alu_out_ex,
-    input  wire [D_WIDTH-1:0]   rs2_val_ex,
-    input  wire [RF_SIZE-1:0]   rd_ex,
-    input  wire                 reg_write_ex,
-    input  wire                 mem_we_ex,
-    input  wire                 mem_re_ex,
-
+    input   [D_WIDTH-1:0]   alu_out_ex,
+    input   [D_WIDTH-1:0]   rs2_val_ex,
+    input   [RF_SIZE-1:0]   rd_ex,
+    input                   reg_write_ex,
+    input                   mem_we_ex,
+    input                   mem_re_ex,
+    input                   mem_to_reg_ex,
     //to mem
     output reg  [D_WIDTH-1:0]   alu_out_mem,
     output reg  [D_WIDTH-1:0]   rs2_val_mem,

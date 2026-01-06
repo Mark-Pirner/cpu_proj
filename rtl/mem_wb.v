@@ -2,20 +2,20 @@ module mem_wb #(
     parameter D_WIDTH = 32,
     parameter RF_SIZE = 5
 )(
-    input  wire               clk,
-    input  wire               rst,
+    input                           clk,
+    input                           rst,
 
-    input  wire [D_WIDTH-1:0] alu_out_mem,
-    input  wire [D_WIDTH-1:0] r_data_mem,
-    input  wire [RF_SIZE-1:0] rd_mem,
-    input  wire               reg_write_mem,
-    input  wire               mem_to_reg_mem,
+    input   [D_WIDTH-1:0]           alu_out_mem,
+    input   [D_WIDTH-1:0]           r_data_mem,
+    input   [RF_SIZE-1:0]           rd_mem,
+    input                           reg_write_mem,
+    input                           mem_to_reg_mem,
 
-    output reg [D_WIDTH-1:0] alu_out_wb,
-    output reg [D_WIDTH-1:0] mem_data_wb,
-    output reg [RF_SIZE-1:0] rd_wb,
-    output reg               reg_write_wb,
-    output reg               mem_to_reg_wb
+    output reg [D_WIDTH-1:0]        alu_out_wb,
+    output reg [D_WIDTH-1:0]        mem_data_wb,
+    output reg [RF_SIZE-1:0]        rd_wb,
+    output reg                      reg_write_wb,
+    output reg                      mem_to_reg_wb
 );
     always @(posedge clk or posedge rst) 
     begin

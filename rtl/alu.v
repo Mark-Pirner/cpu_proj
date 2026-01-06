@@ -5,12 +5,12 @@ module alu #(
     parameter OP_SIZE = 4
 )
 (
-    input [OP_SIZE-1:0] alu_op, //operand select
-    input [D_WIDTH-1:0] a, //operand 1 (from RF)
-    input [D_WIDTH-1:0] b, //operand 2 (from RF or immediate)
-    output [D_WIDTH-1:0] y,
-    output zero
-)
+    input [OP_SIZE-1:0]                 alu_op, //operand select
+    input [D_WIDTH-1:0]                 a, //operand 1 (from RF)
+    input [D_WIDTH-1:0]                 b, //operand 2 (from RF or immediate)
+    output reg [D_WIDTH-1:0]            y,
+    output reg                          zero
+);
     always @(*)
     begin
         case (alu_op)
@@ -22,10 +22,8 @@ module alu #(
             4'b0101:    y = ($signed(a) < $signed(b)) ? 1 : 0;
             4'b0110:    y = a << b[4:0];
             4'b0111:    y = a >> b[4:0];
-            default:    y <= 0;
+            default:    y = 0;
         endcase
+        zero = (y == 0);
     end
-
-    assign zero = (y == 0'b1);
-
 endmodule

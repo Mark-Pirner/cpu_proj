@@ -11,16 +11,16 @@ module data_mem #(
 		end
 	`endif
 
-	input clk,
-	input rst,
+	input 						clk,
+	input 						rst,
 	input we,
-	input [A_WIDTH-1:0] w_addr,
-	input [D_WIDTH-1:0] w_data,
-	input re,
-	input [A_WIDTH-1:0] r_addr,
-	output reg [D_WIDTH-1:0] r_data
+	input [A_WIDTH-1:0] 		w_addr,
+	input [D_WIDTH-1:0] 		w_data,
+	input 						re,
+	input [A_WIDTH-1:0] 		r_addr,
+	output reg [D_WIDTH-1:0] 	r_data
 );
-	reg [D_WIDTH-1] mem [0:(1<<MEM_A_WIDTH)-1];
+	reg [D_WIDTH-1:0] mem [0:(1<<MEM_A_WIDTH)-1];
 	
 	wire [MEM_A_WIDTH-1:0] mem_w_index;
 	assign mem_w_index = w_addr[MEM_A_WIDTH + 1 : 2];

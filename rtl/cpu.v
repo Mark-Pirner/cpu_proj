@@ -6,6 +6,7 @@
 `include "alu.v"
 `include "id_stage.v"
 `include "ex_mem.v"
+`include "mem_wb.v"
 
 `define D_WIDTH         32
 `define A_WIDTH         32
@@ -35,6 +36,8 @@ module top_inst(
 
     //idex wires
     wire                                id_en;
+    wire [`RF_SIZE-1:0]                 idex_rs1;
+    wire [`RF_SIZE-1:0]                 idex_rs2;
     wire [`D_WIDTH-1:0]                 idex_rs1_val;
     wire [`D_WIDTH-1:0]                 idex_rs2_val;
     wire [`D_WIDTH-1:0]                 idex_imm;
@@ -65,7 +68,9 @@ module top_inst(
     wire                                memwb_mem_to_reg;
 
     //alu wires
-    wire [`D_WIDTH-1:0]                 a_in;
+    wire [`D_WIDTH-1:0]                 alu_a_w;
+    wire [`D_WIDTH-1:0]                 rs2_fwd_w;
+    wire [`D_WIDTH-1:0]                 alu_b_w;
     wire [`D_WIDTH-1:0]                 b_in;
     wire [`D_WIDTH-1:0]                 alu_out;
     wire                                alu_zero;
@@ -89,7 +94,8 @@ module top_inst(
     //instantiate isu memory
     isu_mem # (
         .MEM_A_WIDTH(`MEM_A_WIDTH),
-        .D_WIDTH(`D_WIDTH)
+        .D_WIDTH(`D_WIDTH),
+        .A_WIDTH(`A_WIDTH)
     )    
     isu_mem_u(
         .clk(clk),
@@ -157,6 +163,8 @@ module top_inst(
         .wb_rd(memwb_rd),
         .wb_data(wb_data),
 
+        .rs1_ex(idex_rs1),
+        .rs2_ex(idex_rs2),
         .rs1_val_ex(idex_rs1_val),
         .rs2_val_ex(idex_rs2_val),
         .imm_ex(idex_imm),
@@ -170,9 +178,16 @@ module top_inst(
     );
 
     //----------------------------------INSTRUCTION EXEC--------------------------------------------
-    //instantiate alu
-    assign a_in = idex_rs1_val;
-    assign b_in = idex_alu_src_imm ? idex_imm : idex_rs2_val;
+    //instantiate alu and add forwarding muxes
+    assign alu_a_w = (exmem_reg_write && (exmem_rd != 0) && (exmem_rd == idex_rs1)) ? exmem_alu_out :
+                 (memwb_reg_write && (memwb_rd != 0) && (memwb_rd == idex_rs1)) ? wb_data :
+                 idex_rs1_val;
+
+    assign rs2_fwd_w = (exmem_reg_write && (exmem_rd != 0) && (exmem_rd == idex_rs2)) ? exmem_alu_out :
+                    (memwb_reg_write && (memwb_rd != 0) && (memwb_rd == idex_rs2)) ? wb_data :
+                    idex_rs2_val;
+    
+    assign alu_b_w = idex_alu_src_imm ? idex_imm : rs2_fwd_w;
 
     alu # (
         .D_WIDTH(`D_WIDTH),
@@ -180,8 +195,8 @@ module top_inst(
     )    
     alu_u(
         .alu_op(idex_alu_op),
-        .a(a_in),
-        .b(b_in),
+        .a(alu_a_w),
+        .b(alu_b_w),
         .y(alu_out),
         .zero(alu_zero)
     );
@@ -214,7 +229,7 @@ module top_inst(
         .rst(rst),
 
         .alu_out_ex(alu_out),
-        .rs2_val_ex(idex_rs2_val),
+        .rs2_val_ex(rs2_fwd_w),
         .rd_ex(idex_rd),
         .reg_write_ex(idex_reg_write),
         .mem_we_ex(idex_mem_we),
