@@ -67,7 +67,7 @@ module top_inst(
     wire [`D_WIDTH-1:0]                 wb_data;
     wire                                memwb_mem_to_reg;
 
-    //alu wires
+    //alu wires + fwd
     wire [`D_WIDTH-1:0]                 alu_a_w;
     wire [`D_WIDTH-1:0]                 rs2_fwd_w;
     wire [`D_WIDTH-1:0]                 alu_b_w;
@@ -75,9 +75,12 @@ module top_inst(
     wire [`D_WIDTH-1:0]                 alu_out;
     wire                                alu_zero;
 
+    //stall
+    wire load_use_stall = idex_mem_re && (idex_rd != 0) && ((idex_rd == rs1 && rs1 != 5'b0) || (idex_rd == rs2 && rs2 != 5'b0));
+
     //----------------------------------INSTRUCTION FETCH--------------------------------------------
     //instantiate pc register 
-    assign pc_en = 1'b1;
+    assign pc_en = ~load_use_stall;
     assign pc_next = pc_cur + 4; //advance a word
 
     pc # (
@@ -105,7 +108,7 @@ module top_inst(
     );
 
     //instantiate instruction register
-    assign ir_en = 1'b1;
+    assign ir_en = ~load_use_stall;
 
     wire [`D_WIDTH-1:0]                 instr;
     wire [`RF_SIZE-1:0]                 rs2;
@@ -150,6 +153,7 @@ module top_inst(
         .clk(clk),
         .rst(rst),
         .en(id_en),
+        .bubble(load_use_stall),
 
         .instr(instr),
         .rs1(rs1),

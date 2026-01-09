@@ -1,4 +1,4 @@
-//clocked dual port ram with write-through and async reset
+//clocked dual port ram with sync write, comb read
 module data_mem #(
 	parameter MEM_A_WIDTH = 8,
 	parameter D_WIDTH = 32,
@@ -18,7 +18,7 @@ module data_mem #(
 	input [D_WIDTH-1:0] 		w_data,
 	input 						re,
 	input [A_WIDTH-1:0] 		r_addr,
-	output reg [D_WIDTH-1:0] 	r_data
+	output wire [D_WIDTH-1:0] 	r_data
 );
 	reg [D_WIDTH-1:0] mem [0:(1<<MEM_A_WIDTH)-1];
 	
@@ -30,14 +30,11 @@ module data_mem #(
 
 	always @(posedge clk, posedge rst)
 	begin
-		if (rst)
-			r_data <= 0;
-		else
 		begin	
 			if (we)
                 mem[mem_w_index] <= w_data;
-            if (re)
-                r_data <= (we && (w_addr == r_addr)) ? w_data : mem[mem_r_index];
 		end
 	end
+
+	assign r_data = re ? ((we && (w_addr == r_addr)) ? w_data : mem[mem_r_index]) : {D_WIDTH{1'b0}};
 endmodule
