@@ -9,7 +9,6 @@ module id_stage #(
     input                       clk,
     input                       rst,
     input                       en,
-    input                       bubble,   
 
     //from IF   
     input   [D_WIDTH-1:0]       instr,

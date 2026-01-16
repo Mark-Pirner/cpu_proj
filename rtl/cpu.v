@@ -7,7 +7,6 @@
 `include "ex_mem.v"
 `include "mem_wb.v"
 `include "if_id.v"
-`include "prefetch_buffer.v"
 
 `define D_WIDTH         32
 `define A_WIDTH         32
@@ -31,11 +30,6 @@ module top_inst(
 
     //isu wires
     wire[`D_WIDTH-1:0]                  cur_isu;
-
-    //prefetch wires
-    wire                                pf_valid;
-    wire [`D_WIDTH-1:0]                 pf_instr;
-    wire                                pf_can_accept;
 
     //ifid wires
     wire [`D_WIDTH-1:0]                 ifid_instr;
@@ -94,10 +88,7 @@ module top_inst(
     //----------------------------------INSTRUCTION FETCH--------------------------------------------
     //instantiate pc register 
     assign pc_next = pc_cur + 4;
-    wire ifid_fire;
-    assign ifid_fire    = pf_valid && ~load_use_stall;
-    assign pf_can_accept = ~pf_valid || ifid_fire;
-    assign pc_en         = pf_can_accept;
+    assign pc_en         = ~load_use_stall;
 
     pc # (
         .A_WIDTH(`A_WIDTH)
@@ -123,21 +114,6 @@ module top_inst(
         .addr(pc_cur),
         .dout(cur_isu)
     );
-    //----------------------------------PRFETCH BUFFER------------------------------------------
-    prefetch_buf #(
-    .D_WIDTH(`D_WIDTH)
-    ) pf_u (
-        .clk(clk),
-        .rst(rst),
-
-        .in_valid(pc_en),
-        .in_instr(cur_isu),
-
-        .out_ready(ifid_fire),
-
-        .out_valid(pf_valid),
-        .out_instr(pf_instr)
-    );
 
     //----------------------------------FETCH/DECODE--------------------------------------------
     if_id #(
@@ -146,8 +122,8 @@ module top_inst(
     ) if_id_u (
         .clk(clk),
         .rst(rst),
-        .en(~load_use_stall && pf_valid),
-        .instr_in(pf_instr),
+        .en(~load_use_stall),
+        .instr_in(cur_isu),
         .pc_in(pc_cur),
         .instr_out(ifid_instr),
         .pc_out()
@@ -174,7 +150,6 @@ module top_inst(
         .clk(clk),
         .rst(rst),
         .en(id_en),
-        .bubble(load_use_stall),
 
         .instr(ifid_instr),
         .rs1(rs1),
