@@ -2,15 +2,16 @@
 `include "isu_mem.v"
 `include "data_mem.v"
 `include "pc.v"
-`include "ir.v"
 `include "alu.v"
 `include "id_stage.v"
 `include "ex_mem.v"
 `include "mem_wb.v"
+`include "if_id.v"
+`include "prefetch_buffer.v"
 
 `define D_WIDTH         32
 `define A_WIDTH         32
-`define N_REGS          32
+`define N_REGS          32 
 `define MEM_A_WIDTH     8
 `define RF_SIZE         $clog2(`N_REGS)
 `define OP_CODE_SIZE    7
@@ -31,8 +32,20 @@ module top_inst(
     //isu wires
     wire[`D_WIDTH-1:0]                  cur_isu;
 
-    //ir wires
-    wire                                ir_en;
+    //prefetch wires
+    wire                                pf_valid;
+    wire [`D_WIDTH-1:0]                 pf_instr;
+    wire                                pf_can_accept;
+
+    //ifid wires
+    wire [`D_WIDTH-1:0]                 ifid_instr;
+
+    wire [`RF_SIZE-1:0]                 rs1;
+    wire [`RF_SIZE-1:0]                 rs2;
+    wire [`RF_SIZE-1:0]                 rd;
+    wire [`FUNCT_7_SIZE-1:0]            funct7;
+    wire [`FUNCT_3_SIZE-1:0]            funct3;
+    wire [`OP_CODE_SIZE-1:0]            opcode;
 
     //idex wires
     wire                                id_en;
@@ -80,8 +93,11 @@ module top_inst(
 
     //----------------------------------INSTRUCTION FETCH--------------------------------------------
     //instantiate pc register 
-    assign pc_en = ~load_use_stall;
-    assign pc_next = pc_cur + 4; //advance a word
+    assign pc_next = pc_cur + 4;
+    wire ifid_fire;
+    assign ifid_fire    = pf_valid && ~load_use_stall;
+    assign pf_can_accept = ~pf_valid || ifid_fire;
+    assign pc_en         = pf_can_accept;
 
     pc # (
         .A_WIDTH(`A_WIDTH)
@@ -102,43 +118,48 @@ module top_inst(
     )    
     isu_mem_u(
         .clk(clk),
+        .en(~load_use_stall),
         .rst(rst),
         .addr(pc_cur),
         .dout(cur_isu)
     );
-
-    //instantiate instruction register
-    assign ir_en = ~load_use_stall;
-
-    wire [`D_WIDTH-1:0]                 instr;
-    wire [`RF_SIZE-1:0]                 rs2;
-    wire [`RF_SIZE-1:0]                 rs1;
-    wire [`RF_SIZE-1:0]                 rd;
-    wire [`FUNCT_7_SIZE-1:0]            funct7;
-    wire [`FUNCT_3_SIZE-1:0]            funct3;
-    wire [`OP_CODE_SIZE-1:0]            opcode;
-
-    ir # (
-        .D_WIDTH(`D_WIDTH),
-        .N_REGS(`N_REGS),
-        .RF_SIZE(`RF_SIZE),
-        .OP_CODE_SIZE(`OP_CODE_SIZE),
-        .FUNCT_3_SIZE(`FUNCT_3_SIZE),
-        .FUNCT_7_SIZE(`FUNCT_7_SIZE)
-    )    
-    ir_u(
+    //----------------------------------PRFETCH BUFFER------------------------------------------
+    prefetch_buf #(
+    .D_WIDTH(`D_WIDTH)
+    ) pf_u (
         .clk(clk),
         .rst(rst),
-        .en(ir_en),
-        .isu(cur_isu),
-        .instr(instr),
-        .rs2(rs2),
-        .rs1(rs1),
-        .rd(rd),
-        .funct7(funct7),
-        .funct3(funct3),
-        .op_code(opcode)
+
+        .in_valid(pc_en),
+        .in_instr(cur_isu),
+
+        .out_ready(ifid_fire),
+
+        .out_valid(pf_valid),
+        .out_instr(pf_instr)
     );
+
+    //----------------------------------FETCH/DECODE--------------------------------------------
+    if_id #(
+        .D_WIDTH(`D_WIDTH),
+        .A_WIDTH(`A_WIDTH)
+    ) if_id_u (
+        .clk(clk),
+        .rst(rst),
+        .en(~load_use_stall && pf_valid),
+        .instr_in(pf_instr),
+        .pc_in(pc_cur),
+        .instr_out(ifid_instr),
+        .pc_out()
+    );
+
+    assign opcode = ifid_instr[6:0];
+    assign rd     = ifid_instr[11:7];
+    assign funct3 = ifid_instr[14:12];
+    assign rs1    = ifid_instr[19:15];
+    assign rs2    = ifid_instr[24:20];
+    assign funct7 = ifid_instr[31:25];
+
 
     //----------------------------------INSTRUCTION DECODE--------------------------------------------
     assign id_en = 1'b1;
@@ -155,7 +176,7 @@ module top_inst(
         .en(id_en),
         .bubble(load_use_stall),
 
-        .instr(instr),
+        .instr(ifid_instr),
         .rs1(rs1),
         .rs2(rs2),
         .rd(rd),
@@ -183,11 +204,11 @@ module top_inst(
 
     //----------------------------------INSTRUCTION EXEC--------------------------------------------
     //instantiate alu and add forwarding muxes
-    assign alu_a_w = (exmem_reg_write && (exmem_rd != 0) && (exmem_rd == idex_rs1)) ? exmem_alu_out :
+    assign alu_a_w = (exmem_reg_write && (~exmem_mem_re) && (exmem_rd != 0) && (exmem_rd == idex_rs1)) ? exmem_alu_out :
                  (memwb_reg_write && (memwb_rd != 0) && (memwb_rd == idex_rs1)) ? wb_data :
                  idex_rs1_val;
 
-    assign rs2_fwd_w = (exmem_reg_write && (exmem_rd != 0) && (exmem_rd == idex_rs2)) ? exmem_alu_out :
+    assign rs2_fwd_w = (exmem_reg_write && (~exmem_mem_re) && (exmem_rd != 0) && (exmem_rd == idex_rs2)) ? exmem_alu_out :
                     (memwb_reg_write && (memwb_rd != 0) && (memwb_rd == idex_rs2)) ? wb_data :
                     idex_rs2_val;
     

@@ -1,7 +1,8 @@
 module ex_mem #(
     parameter D_WIDTH = 32,
     parameter RF_SIZE = 5
-)(
+)
+(
     input                   clk,
     input                   rst,
 

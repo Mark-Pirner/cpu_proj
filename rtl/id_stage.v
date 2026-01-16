@@ -155,21 +155,6 @@ module id_stage #(
             rs1_ex          <= {RF_SIZE{1'b0}};
             rs2_ex          <= {RF_SIZE{1'b0}};
         end
-        else if (bubble)
-        begin
-            rs1_val_ex      <= {D_WIDTH{1'b0}};
-            rs2_val_ex      <= {D_WIDTH{1'b0}};
-            imm_ex          <= {D_WIDTH{1'b0}};
-            rd_ex           <= {RF_SIZE{1'b0}};
-            reg_write_ex    <= 1'b0;
-            alu_src_imm_ex  <= 1'b0;
-            alu_op_ex       <= {OP_SIZE{1'b0}};
-            mem_we_ex       <= 1'b0;
-            mem_re_ex       <= 1'b0;
-            mem_to_reg_ex   <= 1'b0;
-            rs1_ex          <= {RF_SIZE{1'b0}};
-            rs2_ex          <= {RF_SIZE{1'b0}};
-        end
         else if (en) 
         begin
             rs1_val_ex      <= rs1_val_in;
