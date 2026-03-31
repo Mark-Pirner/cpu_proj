@@ -4,6 +4,7 @@ module mem_wb #(
 )(
     input                           clk,
     input                           rst,
+    input                           en,
 
     input   [D_WIDTH-1:0]           alu_out_mem,
     input   [D_WIDTH-1:0]           r_data_mem,
@@ -27,7 +28,7 @@ module mem_wb #(
             reg_write_wb <= 1'b0;
             mem_to_reg_wb <= 1'b0;
         end 
-        else 
+        else if (en)
         begin
             alu_out_wb   <= alu_out_mem;
             mem_data_wb  <= r_data_mem;

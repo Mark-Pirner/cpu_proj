@@ -5,6 +5,7 @@ module ex_mem #(
 (
     input                   clk,
     input                   rst,
+    input                   en,
 
     //from ex
     input   [D_WIDTH-1:0]   alu_out_ex,
@@ -37,7 +38,7 @@ module ex_mem #(
             mem_to_reg_mem  <= 1'b0;
 
         end 
-        else 
+        else if (en)
         begin
             alu_out_mem     <= alu_out_ex;
             rs2_val_mem     <= rs2_val_ex;

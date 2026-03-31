@@ -5,28 +5,26 @@ module data_mem #(
 	parameter A_WIDTH =32
 )
 (
-	`ifdef LTB_EN
+    input                       clk,
+    input                       rst,
+
+    input                       we,
+    input                       re,
+    input [A_WIDTH-1:0]         w_addr,
+    input [A_WIDTH-1:0]         r_addr,
+    input [D_WIDTH-1:0]         w_data,
+    output wire [D_WIDTH-1:0]   r_data
+);
+	reg [D_WIDTH-1:0] mem [0:(1<<MEM_A_WIDTH)-1];
+
+    `ifdef LTB_EN
 		initial begin
 			$readmemh("data_mem_test_stimuli.hex", mem);
 		end
 	`endif
-
-	input 						clk,
-	input 						rst,
-	input we,
-	input [A_WIDTH-1:0] 		w_addr,
-	input [D_WIDTH-1:0] 		w_data,
-	input 						re,
-	input [A_WIDTH-1:0] 		r_addr,
-	output wire [D_WIDTH-1:0] 	r_data
-);
-	reg [D_WIDTH-1:0] mem [0:(1<<MEM_A_WIDTH)-1];
 	
-	wire [MEM_A_WIDTH-1:0] mem_w_index;
-	assign mem_w_index = w_addr[MEM_A_WIDTH + 1 : 2];
-	
-	wire [MEM_A_WIDTH-1:0] mem_r_index;
-	assign mem_r_index = r_addr [MEM_A_WIDTH + 1 : 2];
+	wire [MEM_A_WIDTH-1:0] mem_w_index = w_addr[MEM_A_WIDTH+1:2];
+	wire [MEM_A_WIDTH-1:0] mem_r_index = r_addr[MEM_A_WIDTH+1:2];
 
 	always @(posedge clk, posedge rst)
 	begin
@@ -36,5 +34,5 @@ module data_mem #(
 		end
 	end
 
-	assign r_data = re ? ((we && (w_addr == r_addr)) ? w_data : mem[mem_r_index]) : {D_WIDTH{1'b0}};
+	assign r_data = re ? ((we && (mem_w_index == mem_r_index)) ? w_data : mem[mem_r_index]) : {D_WIDTH{1'b0}};
 endmodule

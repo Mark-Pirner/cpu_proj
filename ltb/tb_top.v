@@ -27,7 +27,7 @@ module tb_top;
 
     initial 
     begin
-        #200 $finish;
+        #400 $finish;
     end
 
 endmodule

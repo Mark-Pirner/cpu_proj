@@ -9,6 +9,7 @@ module id_stage #(
     input                       clk,
     input                       rst,
     input                       en,
+    input                       bubble,
 
     //from IF   
     input   [D_WIDTH-1:0]       instr,
@@ -105,7 +106,7 @@ module id_stage #(
             imm_d =         imm_i_ext;
 
             case(funct3)
-                3'b000:  alu_op_d = (funct7 == 7'b0000000) ? 4'b0000 : 4'b0001;
+                3'b000:  alu_op_d = 4'b0000;
                 3'b111:  alu_op_d = 4'b0010;
                 3'b110:  alu_op_d = 4'b0011;
                 3'b100:  alu_op_d = 4'b0100;
@@ -154,20 +155,38 @@ module id_stage #(
             rs1_ex          <= {RF_SIZE{1'b0}};
             rs2_ex          <= {RF_SIZE{1'b0}};
         end
-        else if (en) 
+        else if (en)
         begin
-            rs1_val_ex      <= rs1_val_in;
-            rs2_val_ex      <= rs2_val_in;
-            imm_ex          <= imm_d;
-            rd_ex           <= rd;
-            reg_write_ex    <= reg_write_d;
-            alu_src_imm_ex  <= alu_src_imm_d;
-            alu_op_ex       <= alu_op_d;
-            mem_we_ex       <= mem_we_d;
-            mem_re_ex       <= mem_re_d;
-            mem_to_reg_ex   <= mem_to_reg_d;
-            rs1_ex          <= rs1;
-            rs2_ex          <= rs2;
+            if (bubble)
+            begin
+                rs1_val_ex      <= {D_WIDTH{1'b0}};
+                rs2_val_ex      <= {D_WIDTH{1'b0}};
+                imm_ex          <= {D_WIDTH{1'b0}};
+                rd_ex           <= {RF_SIZE{1'b0}};
+                reg_write_ex    <= 1'b0;
+                alu_src_imm_ex  <= 1'b0;
+                alu_op_ex       <= {OP_SIZE{1'b0}};
+                mem_we_ex       <= 1'b0;
+                mem_re_ex       <= 1'b0;
+                mem_to_reg_ex   <= 1'b0;
+                rs1_ex          <= {RF_SIZE{1'b0}};
+                rs2_ex          <= {RF_SIZE{1'b0}};
+            end
+            else
+            begin
+                rs1_val_ex      <= rs1_val_in;
+                rs2_val_ex      <= rs2_val_in;
+                imm_ex          <= imm_d;
+                rd_ex           <= rd;
+                reg_write_ex    <= reg_write_d;
+                alu_src_imm_ex  <= alu_src_imm_d;
+                alu_op_ex       <= alu_op_d;
+                mem_we_ex       <= mem_we_d;
+                mem_re_ex       <= mem_re_d;
+                mem_to_reg_ex   <= mem_to_reg_d;
+                rs1_ex          <= rs1;
+                rs2_ex          <= rs2;
+            end
         end
     end
 endmodule

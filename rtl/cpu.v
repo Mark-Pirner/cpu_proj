@@ -1,6 +1,6 @@
 //main block + control logic
 `include "isu_mem.v"
-`include "data_mem.v"
+`include "mem_intf.v"
 `include "pc.v"
 `include "alu.v"
 `include "id_stage.v"
@@ -84,11 +84,10 @@ module top_inst(
 
     //stall
     wire load_use_stall = idex_mem_re && (idex_rd != 0) && ((idex_rd == rs1 && rs1 != 5'b0) || (idex_rd == rs2 && rs2 != 5'b0));
-
+    wire mem_stall;
     //----------------------------------INSTRUCTION FETCH--------------------------------------------
     //instantiate pc register 
     assign pc_next = pc_cur + 4;
-    assign pc_en         = ~load_use_stall;
 
     pc # (
         .A_WIDTH(`A_WIDTH)
@@ -96,7 +95,7 @@ module top_inst(
     pc_u(
         .clk(clk),
         .rst(rst),
-        .en(pc_en),
+        .en(~load_use_stall && ~mem_stall),
         .next_pc(pc_next),
         .pc(pc_cur)
     );
@@ -109,7 +108,7 @@ module top_inst(
     )    
     isu_mem_u(
         .clk(clk),
-        .en(~load_use_stall),
+        .en(~load_use_stall && ~mem_stall),
         .rst(rst),
         .addr(pc_cur),
         .dout(cur_isu)
@@ -122,7 +121,7 @@ module top_inst(
     ) if_id_u (
         .clk(clk),
         .rst(rst),
-        .en(~load_use_stall),
+        .en(~load_use_stall && ~mem_stall),
         .instr_in(cur_isu),
         .pc_in(pc_cur),
         .instr_out(ifid_instr),
@@ -139,7 +138,6 @@ module top_inst(
 
     //----------------------------------INSTRUCTION DECODE--------------------------------------------
     assign id_en = 1'b1;
-    assign wb_data = memwb_mem_to_reg ? memwb_mem_data : memwb_alu_out;
 
     id_stage #(
         .D_WIDTH(`D_WIDTH),
@@ -150,6 +148,7 @@ module top_inst(
         .clk(clk),
         .rst(rst),
         .en(id_en),
+        .bubble(load_use_stall),
 
         .instr(ifid_instr),
         .rs1(rs1),
@@ -179,15 +178,30 @@ module top_inst(
 
     //----------------------------------INSTRUCTION EXEC--------------------------------------------
     //instantiate alu and add forwarding muxes
-    assign alu_a_w = (exmem_reg_write && (~exmem_mem_re) && (exmem_rd != 0) && (exmem_rd == idex_rs1)) ? exmem_alu_out :
-                 (memwb_reg_write && (memwb_rd != 0) && (memwb_rd == idex_rs1)) ? wb_data :
-                 idex_rs1_val;
+    assign alu_a_w =
+        //forward load result from MEM stage
+        (exmem_mem_re && exmem_r_data_valid &&
+        (exmem_rd != 0) && (exmem_rd == idex_rs1)) ? exmem_r_data :
+        //forward ALU result from EX/MEM stage
+        (exmem_reg_write && ~exmem_mem_re &&
+        (exmem_rd != 0) && (exmem_rd == idex_rs1)) ? exmem_alu_out :
+        //forward from WB stage
+        (memwb_reg_write && (memwb_rd != 0) &&
+        (memwb_rd == idex_rs1)) ? wb_data :
+        //default: register file value
+        idex_rs1_val;
 
-    assign rs2_fwd_w = (exmem_reg_write && (~exmem_mem_re) && (exmem_rd != 0) && (exmem_rd == idex_rs2)) ? exmem_alu_out :
-                    (memwb_reg_write && (memwb_rd != 0) && (memwb_rd == idex_rs2)) ? wb_data :
-                    idex_rs2_val;
-    
-    assign alu_b_w = idex_alu_src_imm ? idex_imm : rs2_fwd_w;
+    assign rs2_fwd_w =
+        (exmem_mem_re && exmem_r_data_valid &&
+        (exmem_rd != 0) && (exmem_rd == idex_rs2)) ? exmem_r_data :
+        (exmem_reg_write && ~exmem_mem_re &&
+        (exmem_rd != 0) && (exmem_rd == idex_rs2)) ? exmem_alu_out :
+        (memwb_reg_write && (memwb_rd != 0) &&
+        (memwb_rd == idex_rs2)) ? wb_data :
+        idex_rs2_val;
+
+    assign alu_b_w =
+        idex_alu_src_imm ? idex_imm : rs2_fwd_w;
 
     alu # (
         .D_WIDTH(`D_WIDTH),
@@ -202,23 +216,6 @@ module top_inst(
     );
 
     //----------------------------------MEM EXEC--------------------------------------------
-    //instantiate data mem
-    data_mem # (
-        .MEM_A_WIDTH(`MEM_A_WIDTH),
-        .D_WIDTH(`D_WIDTH),
-        .A_WIDTH(`A_WIDTH)
-    )    
-    data_mem_u(
-        .clk(clk),
-        .rst(rst),
-        .we(exmem_mem_we),
-        .w_addr(exmem_alu_out),
-        .w_data(exmem_rs2_val),
-        .re(exmem_mem_re),
-        .r_addr(exmem_alu_out),
-        .r_data(exmem_r_data)
-    );
-
     //instantiate exmem
     ex_mem #(
         .D_WIDTH(`D_WIDTH),
@@ -227,7 +224,7 @@ module top_inst(
     ex_mem_u (
         .clk(clk),
         .rst(rst),
-
+        .en(~mem_stall),
         .alu_out_ex(alu_out),
         .rs2_val_ex(rs2_fwd_w),
         .rd_ex(idex_rd),
@@ -245,6 +242,42 @@ module top_inst(
         .mem_to_reg_mem(exmem_mem_to_reg)
     );
 
+    //add memstall for fetches to memory
+    assign                  mem_stall = (exmem_mem_re || exmem_mem_we) && !r_in;
+
+    //instantiate mem intf
+    wire                    r_in;
+    wire                    we_mem;
+    wire                    re_mem;
+
+    mem_intf #(
+        .MEM_A_WIDTH(`MEM_A_WIDTH),
+        .D_WIDTH(`D_WIDTH),
+        .A_WIDTH(`A_WIDTH)
+    ) 
+    mem_intf_u(
+        .clk(clk),
+        .rst(rst),
+
+        //in
+        .v_in(exmem_mem_re | exmem_mem_we),
+        .mem_in_addr(exmem_alu_out),
+        .mem_in_data(exmem_rs2_val),
+        .mem_in_we(exmem_mem_we),
+        .mem_in_re(exmem_mem_re),
+        .r_in(r_in),
+
+        //out
+        .r_out(1'b1),
+        .we_q(we_mem),
+        .re_q(re_mem),
+        .v_out(exmem_r_data_valid),
+        .mem_out_rdata(exmem_r_data)
+    );
+
+    assign                  wb_data = memwb_mem_to_reg ? ((re_mem) ? exmem_r_data : memwb_mem_data) : memwb_alu_out;
+
+
     //----------------------------------WB--------------------------------------------
     //instantiate mem_wb
     mem_wb #(
@@ -253,6 +286,7 @@ module top_inst(
     ) mem_wb_u (
         .clk(clk),
         .rst(rst),
+        .en(~mem_stall),
 
         .alu_out_mem(exmem_alu_out),
         .r_data_mem(exmem_r_data),
