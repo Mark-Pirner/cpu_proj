@@ -22,6 +22,8 @@ module alu #(
             4'b0101:    y = ($signed(a) < $signed(b)) ? 1 : 0;
             4'b0110:    y = a << b[4:0];
             4'b0111:    y = a >> b[4:0];
+            4'b1000:    y = $signed(a) >>> b[4:0];
+            4'b1001:    y = (a < b) ? 1 : 0;
             default:    y = 0;
         endcase
         zero = (y == 0);

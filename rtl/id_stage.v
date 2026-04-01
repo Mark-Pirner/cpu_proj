@@ -2,6 +2,7 @@
 
 module id_stage #(
     parameter D_WIDTH = 32,
+    parameter A_WIDTH = 32,
     parameter N_REGS  = 32,
     parameter RF_SIZE = $clog2(N_REGS),
     parameter OP_SIZE = 4
@@ -13,6 +14,7 @@ module id_stage #(
 
     //from IF   
     input   [D_WIDTH-1:0]       instr,
+    input   [A_WIDTH-1:0]       pc,
     input   [RF_SIZE-1:0]       rs1,
     input   [RF_SIZE-1:0]       rs2,
     input   [RF_SIZE-1:0]       rd,
@@ -92,6 +94,9 @@ module id_stage #(
                 3'b110:  alu_op_d = 4'b0011;
                 3'b100:  alu_op_d = 4'b0100;
                 3'b010:  alu_op_d = 4'b0101;
+                3'b011:  alu_op_d = 4'b1001;
+                3'b001:  alu_op_d = 4'b0110;
+                3'b101:  alu_op_d = funct7[5] ? 4'b1000 : 4'b0111;
                 default: alu_op_d = 4'b1111;
             endcase
         end
@@ -111,6 +116,9 @@ module id_stage #(
                 3'b110:  alu_op_d = 4'b0011;
                 3'b100:  alu_op_d = 4'b0100;
                 3'b010:  alu_op_d = 4'b0101;
+                3'b011:  alu_op_d = 4'b1001;
+                3'b001:  alu_op_d = 4'b0110;
+                3'b101:  alu_op_d = funct7[5] ? 4'b1000 : 4'b0111;
                 default: alu_op_d = 4'b1111;
             endcase
         end
@@ -135,6 +143,27 @@ module id_stage #(
             mem_re_d = 1'b0;
             imm_d = {{20{instr[31]}}, instr[31:25], instr[11:7]};
             alu_op_d = 4'b0000;
+        end
+        //-----------------------U-Type------------------------------------        
+        else if(opcode == 7'b0110111)
+        begin
+            reg_write_d = 1'b1;
+            alu_src_imm_d = 1'b1;
+            mem_to_reg_d = 1'b0;
+            mem_we_d = 1'b0;
+            mem_re_d = 1'b0;
+            imm_d = {instr[31:12], 12'b0}; //upper imm, zeroes in [11:0]
+            alu_op_d = 4'b0000; //add 0 + imm
+        end
+        else if(opcode == 7'b0010111)
+        begin
+            reg_write_d = 1'b1;
+            alu_src_imm_d = 1'b1;
+            mem_to_reg_d = 1'b0;
+            mem_we_d = 1'b0;
+            mem_re_d = 1'b0;
+            imm_d = {instr[31:12], 12'b0}; //upper imm, zeroes in [11:0]
+            alu_op_d = 4'b0000; //add 0 + imm
         end
     end
 
@@ -174,7 +203,7 @@ module id_stage #(
             end
             else
             begin
-                rs1_val_ex      <= rs1_val_in;
+                rs1_val_ex      <= (opcode == 7'b0010111) ? pc : rs1_val_in;
                 rs2_val_ex      <= rs2_val_in;
                 imm_ex          <= imm_d;
                 rd_ex           <= rd;

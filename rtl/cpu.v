@@ -33,6 +33,7 @@ module top_inst(
 
     //ifid wires
     wire [`D_WIDTH-1:0]                 ifid_instr;
+    wire [`A_WIDTH-1:0]                 ifid_pc;
 
     wire [`RF_SIZE-1:0]                 rs1;
     wire [`RF_SIZE-1:0]                 rs2;
@@ -125,7 +126,7 @@ module top_inst(
         .instr_in(cur_isu),
         .pc_in(pc_cur),
         .instr_out(ifid_instr),
-        .pc_out()
+        .pc_out(ifid_pc)
     );
 
     assign opcode = ifid_instr[6:0];
@@ -151,6 +152,7 @@ module top_inst(
         .bubble(load_use_stall),
 
         .instr(ifid_instr),
+        .pc(ifid_pc),
         .rs1(rs1),
         .rs2(rs2),
         .rd(rd),

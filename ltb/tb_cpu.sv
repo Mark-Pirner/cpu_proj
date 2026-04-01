@@ -61,12 +61,72 @@ function automatic logic [31:0] XOR_R(input [4:0] rd, rs1, rs2);
     return {7'b0000000, rs2, rs1, 3'b100, rd, 7'b0110011};
 endfunction
 
+function automatic logic [31:0] SLT_R(input [4:0] rd, rs1, rs2);
+    return {7'b0000000, rs2, rs1, 3'b010, rd, 7'b0110011};
+endfunction
+
+function automatic logic [31:0] SLTU_R(input [4:0] rd, rs1, rs2);
+    return {7'b0000000, rs2, rs1, 3'b011, rd, 7'b0110011};
+endfunction
+
+function automatic logic [31:0] SLL_R(input [4:0] rd, rs1, rs2);
+    return {7'b0000000, rs2, rs1, 3'b001, rd, 7'b0110011};
+endfunction
+
+function automatic logic [31:0] SRL_R(input [4:0] rd, rs1, rs2);
+    return {7'b0000000, rs2, rs1, 3'b101, rd, 7'b0110011};
+endfunction
+
+function automatic logic [31:0] SRA_R(input [4:0] rd, rs1, rs2);
+    return {7'b0100000, rs2, rs1, 3'b101, rd, 7'b0110011};
+endfunction
+
+function automatic logic [31:0] ANDI(input [4:0] rd, rs1, input signed [11:0] imm);
+    return {imm, rs1, 3'b111, rd, 7'b0010011};
+endfunction
+
+function automatic logic [31:0] ORI(input [4:0] rd, rs1, input signed [11:0] imm);
+    return {imm, rs1, 3'b110, rd, 7'b0010011};
+endfunction
+
+function automatic logic [31:0] XORI(input [4:0] rd, rs1, input signed [11:0] imm);
+    return {imm, rs1, 3'b100, rd, 7'b0010011};
+endfunction
+
+function automatic logic [31:0] SLTI(input [4:0] rd, rs1, input signed [11:0] imm);
+    return {imm, rs1, 3'b010, rd, 7'b0010011};
+endfunction
+
+function automatic logic [31:0] SLTIU(input [4:0] rd, rs1, input signed [11:0] imm);
+    return {imm, rs1, 3'b011, rd, 7'b0010011};
+endfunction
+
+function automatic logic [31:0] SLLI(input [4:0] rd, rs1, input [4:0] shamt);
+    return {7'b0000000, shamt, rs1, 3'b001, rd, 7'b0010011};
+endfunction
+
+function automatic logic [31:0] SRLI(input [4:0] rd, rs1, input [4:0] shamt);
+    return {7'b0000000, shamt, rs1, 3'b101, rd, 7'b0010011};
+endfunction
+
+function automatic logic [31:0] SRAI(input [4:0] rd, rs1, input [4:0] shamt);
+    return {7'b0100000, shamt, rs1, 3'b101, rd, 7'b0010011};
+endfunction
+
 function automatic logic [31:0] LW(input [4:0] rd, rs1, input signed [11:0] imm);
     return {imm, rs1, 3'b010, rd, 7'b0000011};
 endfunction
 
 function automatic logic [31:0] SW(input [4:0] rs2, rs1, input signed [11:0] imm);
     return {imm[11:5], rs2, rs1, 3'b010, imm[4:0], 7'b0100011};
+endfunction
+
+function automatic logic [31:0] LUI(input [4:0] rd, input [19:0] imm);
+    return {imm, rd, 7'b0110111};
+endfunction
+
+function automatic logic [31:0] AUIPC(input [4:0] rd, input [19:0] imm);
+    return {imm, rd, 7'b0010111};
 endfunction
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -137,6 +197,7 @@ endtask
 `include "tests/test_forwarding.sv"
 `include "tests/test_sequences.sv"
 `include "tests/test_edge.sv"
+`include "tests/test_lui.sv"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 7.  Main
@@ -150,6 +211,14 @@ initial begin
     $display("================================================================");
 
     test_addi();
+    test_andi();
+    test_ori();
+    test_xori();
+    test_slti();
+    test_sltiu();
+    test_slli();
+    test_srli();
+    test_srai();
     test_sign_extension();
 
     test_add();
@@ -157,6 +226,11 @@ initial begin
     test_and();
     test_or();
     test_xor();
+    test_slt_r();
+    test_sltu_r();
+    test_sll_r();
+    test_srl_r();
+    test_sra_r();
 
     test_sw_lw();
 
@@ -168,6 +242,78 @@ initial begin
     test_running_sum();
     test_store_load_chain();
     test_alu_after_load();
+
+    // 125 LW/ADD/SW combos: fixed order LW→ADD→SW, no NOPs
+    for (int nl = 1; nl <= 5; nl++)
+        for (int na = 1; na <= 5; na++)
+            for (int ns = 1; ns <= 5; ns++)
+                test_lw_add_sw(nl, na, ns);
+
+    // 750 permutation tests: all 6 block orderings × 125 combos
+    for (int nl = 1; nl <= 5; nl++)
+        for (int na = 1; na <= 5; na++)
+            for (int ns = 1; ns <= 5; ns++)
+                for (int perm = 0; perm < 6; perm++)
+                    test_lw_add_sw_perm(nl, na, ns, perm);
+
+    // 1250 LW/R-type/SW combos: 10 ops × 125 count combos, fixed order
+    for (int rtype = 0; rtype < 10; rtype++)
+        for (int nl = 1; nl <= 5; nl++)
+            for (int nr = 1; nr <= 5; nr++)
+                for (int ns = 1; ns <= 5; ns++)
+                    test_lw_rtype_sw(nl, nr, ns, rtype);
+
+    // 7500 LW/R-type/SW permutation tests: 10 ops × 6 orderings × 125 combos
+    for (int rtype = 0; rtype < 10; rtype++)
+        for (int nl = 1; nl <= 5; nl++)
+            for (int nr = 1; nr <= 5; nr++)
+                for (int ns = 1; ns <= 5; ns++)
+                    for (int perm = 0; perm < 6; perm++)
+                        test_lw_rtype_sw_perm(nl, nr, ns, rtype, perm);
+
+    // 875 LW/I-type/SW combos: 7 ops × 125 count combos, fixed LW→I-type→SW order
+    for (int itype = 0; itype < 7; itype++)
+        for (int nl = 1; nl <= 5; nl++)
+            for (int ni = 1; ni <= 5; ni++)
+                for (int ns = 1; ns <= 5; ns++)
+                    test_lw_itype_sw(nl, ni, ns, itype);
+
+    // 5250 LW/I-type/SW permutation tests: 7 ops × 6 orderings × 125 combos
+    for (int itype = 0; itype < 7; itype++)
+        for (int nl = 1; nl <= 5; nl++)
+            for (int ni = 1; ni <= 5; ni++)
+                for (int ns = 1; ns <= 5; ns++)
+                    for (int perm = 0; perm < 6; perm++)
+                        test_lw_itype_sw_perm(nl, ni, ns, itype, perm);
+
+    test_lui_basic();
+    test_lui_addi();
+    test_lui_forwarding();
+    test_lui_overwrite();
+
+    test_auipc_basic();
+    test_auipc_addi();
+    test_auipc_forwarding();
+
+    // 25 LUI/SW combos: nl=1..5, ns=1..5
+    for (int nl = 1; nl <= 5; nl++)
+        for (int ns = 1; ns <= 5; ns++)
+            test_lui_sw(nl, ns);
+
+    // 25 LUI+ADDI/SW combos: nl=1..5, ns=1..5
+    for (int nl = 1; nl <= 5; nl++)
+        for (int ns = 1; ns <= 5; ns++)
+            test_lui_addi_sw(nl, ns);
+
+    // 25 AUIPC/SW combos: nl=1..5, ns=1..5
+    for (int nl = 1; nl <= 5; nl++)
+        for (int ns = 1; ns <= 5; ns++)
+            test_auipc_sw(nl, ns);
+
+    // 25 AUIPC+ADDI/SW combos: nl=1..5, ns=1..5
+    for (int nl = 1; nl <= 5; nl++)
+        for (int ns = 1; ns <= 5; ns++)
+            test_auipc_addi_sw(nl, ns);
 
     test_x0_immutable();
 
